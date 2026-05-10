@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>A55x Releases</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: monospace; font-size: 14px; background: #fff; color: #111; max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+
+  /* ── Token gate ── */
+  #gate { display: flex; flex-direction: column; gap: 12px; max-width: 400px; margin: 80px auto; }
+  #gate h2 { font-size: 15px; }
+  #gate p  { color: #666; font-size: 12px; line-height: 1.6; }
+  #gate input {
+    width: 100%; padding: 8px; font-family: monospace; font-size: 13px;
+    border: 1px solid #ccc; outline: none;
+  }
+  #gate input:focus { border-color: #888; }
+  #gate button {
+    padding: 8px 16px; background: #111; color: #fff;
+    border: none; cursor: pointer; font-family: monospace; font-size: 13px;
+    align-self: flex-start;
+  }
+  #gate button:hover { background: #333; }
+  #gate-error { color: #c00; font-size: 12px; display: none; }
+  #remember-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #555; }
+
+  /* ── Main content ── */
+  #app { display: none; }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  .sub { color: #666; margin-bottom: 32px; }
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 32px; }
+  .signout { font-size: 12px; color: #999; cursor: pointer; background: none; border: none; font-family: monospace; }
+  .signout:hover { color: #111; }
+  .stats { display: flex; gap: 32px; margin-bottom: 24px; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; padding: 12px 0; flex-wrap: wrap; }
+  .stat-val { font-weight: bold; }
+  .stat-label { color: #666; font-size: 12px; }
+  #search { width: 100%; padding: 8px; font-family: monospace; font-size: 13px; border: 1px solid #ccc; margin-bottom: 20px; outline: none; }
+  #search:focus { border-color: #888; }
+
+  /* ── Cards ── */
+  .release { border: 1px solid #ddd; padding: 16px; margin-bottom: 12px; }
+  .release.latest { border-left: 3px solid #111; }
+  .release-header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .release-name { font-weight: bold; }
+  .release-date { color: #666; font-size: 12px; }
+  .badges { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .badge { font-size: 11px; border: 1px solid #ccc; padding: 1px 6px; }
+  .badge.latest { border-color: #111; }
+  .badge.draft  { border-color: #f90; color: #f90; }
+  .badge.prerel { border-color: #f60; color: #f60; }
+
+  /* Changelog */
+  .changelog { color: #444; font-size: 12px; margin-bottom: 8px; white-space: pre-wrap; line-height: 1.6; max-height: 80px; overflow: hidden; position: relative; }
+  .changelog.expanded { max-height: none; }
+  .changelog:not(.expanded)::after { content:''; position:absolute; bottom:0; left:0; right:0; height:28px; background:linear-gradient(transparent,#fff); }
+  .toggle-cl { background:none; border:none; cursor:pointer; font-family:monospace; font-size:11px; color:#666; padding:0; margin-bottom:10px; display:none; }
+  .has-cl .toggle-cl { display:block; }
+
+  /* Assets */
+  .assets { display: flex; flex-direction: column; gap: 6px; }
+  .asset { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px; background:#f7f7f7; font-size:12px; }
+  .asset-name { flex:1; word-break:break-all; }
+  .asset-meta { color:#666; white-space:nowrap; }
+  .dl-btn { display:inline-block; padding:5px 12px; background:#111; color:#fff; text-decoration:none; font-family:monospace; font-size:12px; }
+  .dl-btn:hover { background:#333; }
+  .no-assets { color:#999; font-size:12px; }
+
+  .state { padding:40px 0; color:#666; text-align:center; }
+  .state strong { display:block; color:#111; margin-bottom:8px; }
+  footer { margin-top:48px; font-size:12px; color:#999; border-top:1px solid #eee; padding-top:16px; }
+  footer a { color:#666; }
+</style>
+</head>
+<body>
+
+<!-- ── Edit these two values ──────────────────────── -->
+<script>
+  const OWNER = "fiqys";
+  const REPO  = "a55x-builds";
+</script>
+<!-- ─────────────────────────────────────────────────── -->
+
+<!-- Token gate -->
+<div id="gate">
+  <h2>A55x Releases — Sign in</h2>
+  <p>Enter your GitHub personal access token to view releases.<br/>
+     Your token is never sent anywhere except the GitHub API.</p>
+  <input id="token-input" type="password" placeholder="github_pat_..." autocomplete="off" />
+  <div id="remember-row">
+    <input type="checkbox" id="remember" />
+    <label for="remember">Remember on this device</label>
+  </div>
+  <button onclick="tryLogin()">Continue</button>
+  <span id="gate-error">Invalid token or no access to this repo.</span>
+</div>
+
+<!-- Main app (hidden until token verified) -->
+<div id="app">
+  <div class="topbar">
+    <div>
+      <h1>Samsung Galaxy A55x — Releases</h1>
+      <p class="sub">Unofficial AOSP-based builds</p>
+    </div>
+    <button class="signout" onclick="signOut()">sign out</button>
+  </div>
+
+  <div class="stats">
+    <div><div class="stat-val" id="s-total">—</div><div class="stat-label">releases</div></div>
+    <div><div class="stat-val" id="s-dl">—</div><div class="stat-label">total downloads</div></div>
+    <div><div class="stat-val" id="s-date">—</div><div class="stat-label">latest build</div></div>
+  </div>
+
+  <input id="search" type="search" placeholder="Filter releases..." />
+  <div id="list"><div class="state">Loading...</div></div>
+
+  <footer><a id="gh-link" href="#">GitHub</a> &nbsp;·&nbsp; Unofficial builds &nbsp;·&nbsp; Use at your own risk</footer>
+</div>
+
+<script>
+const STORAGE_KEY = "a55x_gh_token";
+
+function fmtDate(iso) { return iso ? iso.slice(0,10) : "—"; }
+function fmtSize(b)   { if(!b) return ""; const mb=b/1024/1024; return mb>=1024?(mb/1024).toFixed(2)+" GB":mb.toFixed(1)+" MB"; }
+function fmtNum(n)    { return n>=1000?(n/1000).toFixed(1)+"k":String(n); }
+function esc(s)       { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+async function tryLogin() {
+  const token = document.getElementById("token-input").value.trim();
+  if (!token) return;
+  document.querySelector("#gate button").textContent = "Checking...";
+  document.getElementById("gate-error").style.display = "none";
+
+  // Verify token by fetching the repo — if it returns 200 we're good
+  const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}`, {
+    headers: { Authorization: "Bearer "+token, Accept: "application/vnd.github+json" }
+  });
+
+  if (!r.ok) {
+    document.querySelector("#gate button").textContent = "Continue";
+    document.getElementById("gate-error").style.display = "block";
+    return;
+  }
+
+  if (document.getElementById("remember").checked) {
+    try { localStorage.setItem(STORAGE_KEY, token); } catch(_) {}
+  }
+
+  showApp(token);
+}
+
+function signOut() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch(_) {}
+  location.reload();
+}
+
+// Allow Enter key on token input
+document.getElementById("token-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") tryLogin();
+});
+
+// ── Releases ──────────────────────────────────────────────────────────────────
+
+async function fetchAll(token) {
+  let page=1, all=[];
+  while(true) {
+    const r = await fetch(
+      `https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=30&page=${page}`,
+      { headers: { Authorization:"Bearer "+token, Accept:"application/vnd.github+json" } }
+    );
+    if(!r.ok) throw new Error("GitHub API "+r.status);
+    const batch = await r.json();
+    all = all.concat(batch);
+    if(batch.length < 30) break;
+    page++;
+  }
+  return all;
+}
+
+function renderRelease(rel, isLatest) {
+  const notes = (rel.body||"").trim();
+  const long  = notes.length > 300;
+  const badges = [
+    isLatest ? `<span class="badge latest">latest</span>` : "",
+    rel.draft       ? `<span class="badge draft">draft</span>`       : "",
+    rel.prerelease  ? `<span class="badge prerel">pre-release</span>` : "",
+  ].filter(Boolean).join("");
+
+  const assets = rel.assets.map(a => `
+    <div class="asset">
+      <span class="asset-name">${esc(a.name)}</span>
+      <span class="asset-meta">${fmtSize(a.size)} &nbsp; ${a.download_count} dl</span>
+      <a class="dl-btn" href="${a.browser_download_url}" download>Download</a>
+    </div>`).join("");
+
+  return `
+  <div class="release ${isLatest&&!rel.draft&&!rel.prerelease?'latest':''} ${notes?'has-cl':''}"
+       data-search="${esc((rel.name||rel.tag_name).toLowerCase())}">
+    <div class="release-header">
+      <span class="release-name">${esc(rel.name||rel.tag_name)}</span>
+      <span class="release-date">${fmtDate(rel.published_at)}</span>
+    </div>
+    ${badges ? `<div class="badges">${badges}</div>` : ""}
+    ${notes ? `
+      <div class="changelog ${long?'':'expanded'}" id="cl-${rel.id}">${esc(notes)}</div>
+      <button class="toggle-cl" onclick="toggleCl(${rel.id},this)">show more</button>` : ""}
+    <div class="assets">${assets || `<div class="no-assets">No assets attached.</div>`}</div>
+  </div>`;
+}
+
+function toggleCl(id, btn) {
+  const el = document.getElementById("cl-"+id);
+  el.classList.toggle("expanded");
+  btn.textContent = el.classList.contains("expanded") ? "show less" : "show more";
+}
+
+document.getElementById("search").addEventListener("input", function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll(".release").forEach(el => {
+    el.style.display = el.dataset.search.includes(q) ? "" : "none";
+  });
+});
+
+async function showApp(token) {
+  document.getElementById("gate").style.display = "none";
+  document.getElementById("app").style.display  = "block";
+  document.getElementById("gh-link").href = `https://github.com/${OWNER}/${REPO}`;
+
+  try {
+    const releases = await fetchAll(token);
+    const totalDl  = releases.reduce((s,r)=>s+r.assets.reduce((a,x)=>a+(x.download_count||0),0),0);
+    const latest   = releases.find(r=>!r.draft&&!r.prerelease);
+
+    document.getElementById("s-total").textContent = releases.length;
+    document.getElementById("s-dl").textContent    = fmtNum(totalDl);
+    document.getElementById("s-date").textContent  = latest ? fmtDate(latest.published_at) : "—";
+
+    if (!releases.length) {
+      document.getElementById("list").innerHTML =
+        `<div class="state"><strong>No releases yet</strong>Run release.py to publish your first build.</div>`;
+      return;
+    }
+    document.getElementById("list").innerHTML =
+      releases.map((r,i) => renderRelease(r, i===0)).join("");
+  } catch(e) {
+    document.getElementById("list").innerHTML =
+      `<div class="state"><strong>Failed to load</strong>${esc(e.message)}</div>`;
+  }
+}
+
+// ── Auto-login if token saved ─────────────────────────────────────────────────
+
+(()=>{
+  if (OWNER === "YOUR_USERNAME" || REPO === "YOUR_REPO") {
+    document.getElementById("gate").innerHTML =
+      `<h2>Setup needed</h2><p>Edit OWNER and REPO at the top of index.html</p>`;
+    return;
+  }
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) showApp(saved);
+  } catch(_) {}
+})();
+</script>
+</body>
+</html>
