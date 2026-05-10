@@ -9,14 +9,10 @@
   body { font-family: monospace; font-size: 14px; background: #fff; color: #111; max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
 
   /* ── Token gate ── */
-  #gate { display: flex; flex-direction: column; gap: 12px; max-width: 400px; margin: 80px auto; }
+  #gate { display: flex; flex-direction: column; gap: 12px; max-width: 400px; margin: 80px auto; align-items: flex-start; }
   #gate h2 { font-size: 15px; }
   #gate p  { color: #666; font-size: 12px; line-height: 1.6; }
-  #gate input {
-    width: 100%; padding: 8px; font-family: monospace; font-size: 13px;
-    border: 1px solid #ccc; outline: none;
-  }
-  #gate input:focus { border-color: #888; }
+  #gate input[type="password"] { width: 400px; padding: 8px; font-family: monospace; font-size: 13px; border: 1px solid #ccc; outline: none; align-self: stretch; }
   #gate button {
     padding: 8px 16px; background: #111; color: #fff;
     border: none; cursor: pointer; font-family: monospace; font-size: 13px;
@@ -24,7 +20,7 @@
   }
   #gate button:hover { background: #333; }
   #gate-error { color: #c00; font-size: 12px; display: none; }
-  #remember-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #555; }
+  #remember-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
 
   /* ── Main content ── */
   #app { display: none; }
@@ -89,7 +85,7 @@
      Your token is never sent anywhere except the GitHub API.</p>
   <input id="token-input" type="password" placeholder="github_pat_..." autocomplete="off" />
   <div id="remember-row">
-    <input type="checkbox" id="remember" />
+    <input type="checkbox" id="remember" style="margin:0;" />
     <label for="remember">Remember on this device</label>
   </div>
   <button onclick="tryLogin()">Continue</button>
