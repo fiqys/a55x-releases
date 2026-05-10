@@ -179,6 +179,30 @@ async function fetchAll(token) {
   return all;
 }
 
+async function dlAsset(assetId, filename, btn) {
+  btn.textContent = "Getting link...";
+  btn.style.pointerEvents = "none";
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${OWNER}/${REPO}/releases/assets/${assetId}`,
+      {
+        headers: {
+          Authorization: "Bearer " + window._ghToken,
+          Accept: "application/vnd.github+json"
+        }
+      }
+    );
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    window.location.href = data.browser_download_url;
+  } catch(e) {
+    alert("Download failed: " + e.message);
+  } finally {
+    btn.textContent = "Download";
+    btn.style.pointerEvents = "";
+  }
+}
+
 function renderRelease(rel, isLatest) {
   const raw = (rel.body||"").trim();
   const { link: driveLink, notes } = parseDriveLink(raw);
@@ -203,7 +227,8 @@ function renderRelease(rel, isLatest) {
     <div class="asset">
       <span class="asset-name">${esc(a.name)}</span>
       <span class="asset-meta">${fmtSize(a.size)} &nbsp; ${a.download_count} dl</span>
-      <a class="dl-btn" href="${a.browser_download_url}" download>Download</a>
+      <button class="dl-btn"
+        onclick="dlAsset(${a.id}, '${esc(a.name)}', this)">Download</button>
     </div>`).join("");
 
   const noAssets = !driveLink && !rel.assets.length
@@ -242,6 +267,7 @@ document.getElementById("search").addEventListener("input", function() {
 });
 
 async function showApp(token) {
+  window._ghToken = token;
   document.getElementById("gate").style.display = "none";
   document.getElementById("app").style.display  = "block";
   document.getElementById("gh-link").href = `https://github.com/${OWNER}/${REPO}`;
