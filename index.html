@@ -13,11 +13,7 @@
   #gate h2 { font-size: 15px; }
   #gate p  { color: #666; font-size: 12px; line-height: 1.6; }
   #gate input[type="password"] { width: 400px; padding: 8px; font-family: monospace; font-size: 13px; border: 1px solid #ccc; outline: none; align-self: stretch; }
-  #gate button {
-    padding: 8px 16px; background: #111; color: #fff;
-    border: none; cursor: pointer; font-family: monospace; font-size: 13px;
-    align-self: flex-start;
-  }
+  #gate button { padding: 8px 16px; background: #111; color: #fff; border: none; cursor: pointer; font-family: monospace; font-size: 13px; align-self: flex-start; }
   #gate button:hover { background: #333; }
   #gate-error { color: #c00; font-size: 12px; display: none; }
   #remember-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
@@ -59,8 +55,10 @@
   .asset { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:8px; background:#f7f7f7; font-size:12px; }
   .asset-name { flex:1; word-break:break-all; }
   .asset-meta { color:#666; white-space:nowrap; }
-  .dl-btn { display:inline-block; padding:5px 12px; background:#111; color:#fff; text-decoration:none; font-family:monospace; font-size:12px; }
+  .dl-btn { display:inline-block; padding:5px 12px; background:#111; color:#fff; text-decoration:none; font-family:monospace; font-size:12px; white-space:nowrap; }
   .dl-btn:hover { background:#333; }
+  .dl-btn.drive { background:#1a73e8; }
+  .dl-btn.drive:hover { background:#1558b0; }
   .no-assets { color:#999; font-size:12px; }
 
   .state { padding:40px 0; color:#666; text-align:center; }
@@ -71,12 +69,10 @@
 </head>
 <body>
 
-<!-- ── Edit these two values ──────────────────────── -->
 <script>
   const OWNER = "fiqys";
   const REPO  = "a55x-builds";
 </script>
-<!-- ─────────────────────────────────────────────────── -->
 
 <!-- Token gate -->
 <div id="gate">
@@ -92,7 +88,7 @@
   <span id="gate-error">Invalid token or no access to this repo.</span>
 </div>
 
-<!-- Main app (hidden until token verified) -->
+<!-- Main app -->
 <div id="app">
   <div class="topbar">
     <div>
@@ -122,6 +118,15 @@ function fmtSize(b)   { if(!b) return ""; const mb=b/1024/1024; return mb>=1024?
 function fmtNum(n)    { return n>=1000?(n/1000).toFixed(1)+"k":String(n); }
 function esc(s)       { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
+// Extract and strip DRIVE_LINK from notes
+function parseDriveLink(notes) {
+  const match = notes.match(/^DRIVE_LINK:\s*(\S+)$/m);
+  if (!match) return { link: null, notes: notes };
+  const link = match[1];
+  const cleaned = notes.replace(/\nDRIVE_LINK:.*$/m, "").replace(/^DRIVE_LINK:.*\n?/m, "").trim();
+  return { link, notes: cleaned };
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 async function tryLogin() {
@@ -130,7 +135,6 @@ async function tryLogin() {
   document.querySelector("#gate button").textContent = "Checking...";
   document.getElementById("gate-error").style.display = "none";
 
-  // Verify token by fetching the repo — if it returns 200 we're good
   const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}`, {
     headers: { Authorization: "Bearer "+token, Accept: "application/vnd.github+json" }
   });
@@ -153,7 +157,6 @@ function signOut() {
   location.reload();
 }
 
-// Allow Enter key on token input
 document.getElementById("token-input").addEventListener("keydown", e => {
   if (e.key === "Enter") tryLogin();
 });
@@ -177,20 +180,34 @@ async function fetchAll(token) {
 }
 
 function renderRelease(rel, isLatest) {
-  const notes = (rel.body||"").trim();
-  const long  = notes.length > 300;
+  const raw = (rel.body||"").trim();
+  const { link: driveLink, notes } = parseDriveLink(raw);
+  const long = notes.length > 300;
+
   const badges = [
     isLatest ? `<span class="badge latest">latest</span>` : "",
-    rel.draft       ? `<span class="badge draft">draft</span>`       : "",
-    rel.prerelease  ? `<span class="badge prerel">pre-release</span>` : "",
+    rel.draft      ? `<span class="badge draft">draft</span>`        : "",
+    rel.prerelease ? `<span class="badge prerel">pre-release</span>` : "",
   ].filter(Boolean).join("");
 
-  const assets = rel.assets.map(a => `
+  // Google Drive row (shown first if present)
+  const driveRow = driveLink ? `
+    <div class="asset">
+      <span class="asset-name">ROM zip</span>
+      <span class="asset-meta">Google Drive</span>
+      <a class="dl-btn drive" href="${driveLink}" target="_blank" rel="noopener">Download ROM</a>
+    </div>` : "";
+
+  // GitHub assets (vendor_boot.img etc)
+  const ghAssets = rel.assets.map(a => `
     <div class="asset">
       <span class="asset-name">${esc(a.name)}</span>
       <span class="asset-meta">${fmtSize(a.size)} &nbsp; ${a.download_count} dl</span>
       <a class="dl-btn" href="${a.browser_download_url}" download>Download</a>
     </div>`).join("");
+
+  const noAssets = !driveLink && !rel.assets.length
+    ? `<div class="no-assets">No assets attached.</div>` : "";
 
   return `
   <div class="release ${isLatest&&!rel.draft&&!rel.prerelease?'latest':''} ${notes?'has-cl':''}"
@@ -203,7 +220,11 @@ function renderRelease(rel, isLatest) {
     ${notes ? `
       <div class="changelog ${long?'':'expanded'}" id="cl-${rel.id}">${esc(notes)}</div>
       <button class="toggle-cl" onclick="toggleCl(${rel.id},this)">show more</button>` : ""}
-    <div class="assets">${assets || `<div class="no-assets">No assets attached.</div>`}</div>
+    <div class="assets">
+      ${driveRow}
+      ${ghAssets}
+      ${noAssets}
+    </div>
   </div>`;
 }
 
@@ -247,14 +268,7 @@ async function showApp(token) {
   }
 }
 
-// ── Auto-login if token saved ─────────────────────────────────────────────────
-
 (()=>{
-  if (OWNER === "YOUR_USERNAME" || REPO === "YOUR_REPO") {
-    document.getElementById("gate").innerHTML =
-      `<h2>Setup needed</h2><p>Edit OWNER and REPO at the top of index.html</p>`;
-    return;
-  }
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) showApp(saved);
