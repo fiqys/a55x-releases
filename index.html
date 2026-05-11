@@ -69,26 +69,18 @@
 </head>
 <body>
 
-<script>
-  const OWNER = "fiqys";
-  const REPO  = "a55x-builds";
-</script>
-
-<!-- Token gate -->
 <div id="gate">
-  <h2>A55x Releases — Sign in</h2>
-  <p>Enter your GitHub personal access token to view releases.<br/>
-     Your token is never sent anywhere except the GitHub API.</p>
-  <input id="token-input" type="password" placeholder="github_pat_..." autocomplete="off" />
+  <h2>A55x Releases — Access</h2>
+  <p>Enter the secret repository key to view releases.</p>
+  <input id="token-input" type="password" placeholder="key" autocomplete="off" />
   <div id="remember-row">
     <input type="checkbox" id="remember" style="margin:0;" />
     <label for="remember">Remember on this device</label>
   </div>
   <button onclick="tryLogin()">Continue</button>
-  <span id="gate-error">Invalid token or no access to this repo.</span>
+  <span id="gate-error">Key not found or invalid format.</span>
 </div>
 
-<!-- Main app -->
 <div id="app">
   <div class="topbar">
     <div>
@@ -107,11 +99,11 @@
   <input id="search" type="search" placeholder="Filter releases..." />
   <div id="list"><div class="state">Loading...</div></div>
 
-  <footer><a id="gh-link" href="#">GitHub</a> &nbsp;·&nbsp; Unofficial builds &nbsp;·&nbsp; Use at your own risk</footer>
+  <footer><a id="gh-link" href="#" target="_blank">GitHub</a> &nbsp;·&nbsp; Unofficial builds &nbsp;·&nbsp; Use at your own risk</footer>
 </div>
 
 <script>
-const STORAGE_KEY = "a55x_gh_token";
+const STORAGE_KEY = "a55x_secret_repo";
 
 function fmtDate(iso) { return iso ? iso.slice(0,10) : "—"; }
 function fmtSize(b)   { if(!b) return ""; const mb=b/1024/1024; return mb>=1024?(mb/1024).toFixed(2)+" GB":mb.toFixed(1)+" MB"; }
@@ -130,13 +122,18 @@ function parseDriveLink(notes) {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 async function tryLogin() {
-  const token = document.getElementById("token-input").value.trim();
-  if (!token) return;
+  const repoPath = document.getElementById("token-input").value.trim();
+  if (!repoPath || !repoPath.includes('/')) {
+    document.getElementById("gate-error").style.display = "block";
+    return;
+  }
+  
   document.querySelector("#gate button").textContent = "Checking...";
   document.getElementById("gate-error").style.display = "none";
 
-  const r = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}`, {
-    headers: { Authorization: "Bearer "+token, Accept: "application/vnd.github+json" }
+  // Check if repo exists and is accessible without a token
+  const r = await fetch(`https://api.github.com/repos/${repoPath}`, {
+    headers: { Accept: "application/vnd.github+json" }
   });
 
   if (!r.ok) {
@@ -146,10 +143,10 @@ async function tryLogin() {
   }
 
   if (document.getElementById("remember").checked) {
-    try { localStorage.setItem(STORAGE_KEY, token); } catch(_) {}
+    try { localStorage.setItem(STORAGE_KEY, repoPath); } catch(_) {}
   }
 
-  showApp(token);
+  showApp(repoPath);
 }
 
 function signOut() {
@@ -163,12 +160,12 @@ document.getElementById("token-input").addEventListener("keydown", e => {
 
 // ── Releases ──────────────────────────────────────────────────────────────────
 
-async function fetchAll(token) {
+async function fetchAll(repoPath) {
   let page=1, all=[];
   while(true) {
     const r = await fetch(
-      `https://api.github.com/repos/${OWNER}/${REPO}/releases?per_page=30&page=${page}`,
-      { headers: { Authorization:"Bearer "+token, Accept:"application/vnd.github+json" } }
+      `https://api.github.com/repos/${repoPath}/releases?per_page=30&page=${page}`,
+      { headers: { Accept:"application/vnd.github+json" } }
     );
     if(!r.ok) throw new Error("GitHub API "+r.status);
     const batch = await r.json();
@@ -177,30 +174,6 @@ async function fetchAll(token) {
     page++;
   }
   return all;
-}
-
-async function dlAsset(assetId, filename, btn) {
-  btn.textContent = "Getting link...";
-  btn.style.pointerEvents = "none";
-  try {
-    const r = await fetch(
-      `https://api.github.com/repos/${OWNER}/${REPO}/releases/assets/${assetId}`,
-      {
-        headers: {
-          Authorization: "Bearer " + window._ghToken,
-          Accept: "application/vnd.github+json"
-        }
-      }
-    );
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    const data = await r.json();
-    window.location.href = data.browser_download_url;
-  } catch(e) {
-    alert("Download failed: " + e.message);
-  } finally {
-    btn.textContent = "Download";
-    btn.style.pointerEvents = "";
-  }
 }
 
 function renderRelease(rel, isLatest) {
@@ -222,13 +195,12 @@ function renderRelease(rel, isLatest) {
       <a class="dl-btn drive" href="${driveLink}" target="_blank" rel="noopener">Download ROM</a>
     </div>` : "";
 
-  // GitHub assets (vendor_boot.img etc)
+  // GitHub assets (since repo is public, we can just use browser_download_url)
   const ghAssets = rel.assets.map(a => `
     <div class="asset">
       <span class="asset-name">${esc(a.name)}</span>
       <span class="asset-meta">${fmtSize(a.size)} &nbsp; ${a.download_count} dl</span>
-      <button class="dl-btn"
-        onclick="dlAsset(${a.id}, '${esc(a.name)}', this)">Download</button>
+      <a class="dl-btn" href="${a.browser_download_url}">Download</a>
     </div>`).join("");
 
   const noAssets = !driveLink && !rel.assets.length
@@ -266,14 +238,13 @@ document.getElementById("search").addEventListener("input", function() {
   });
 });
 
-async function showApp(token) {
-  window._ghToken = token;
+async function showApp(repoPath) {
   document.getElementById("gate").style.display = "none";
   document.getElementById("app").style.display  = "block";
-  document.getElementById("gh-link").href = `https://github.com/${OWNER}/${REPO}`;
+  document.getElementById("gh-link").href = `https://github.com/${repoPath}`;
 
   try {
-    const releases = await fetchAll(token);
+    const releases = await fetchAll(repoPath);
     const totalDl  = releases.reduce((s,r)=>s+r.assets.reduce((a,x)=>a+(x.download_count||0),0),0);
     const latest   = releases.find(r=>!r.draft&&!r.prerelease);
 
