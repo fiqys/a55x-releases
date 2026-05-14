@@ -244,7 +244,11 @@ async function showApp(repoPath) {
   document.getElementById("gh-link").href = `https://github.com/${repoPath}`;
 
   try {
-    const releases = await fetchAll(repoPath);
+    let releases = await fetchAll(repoPath);
+
+    // Sort by published_at (newest first) to override GitHub's default created_at sorting
+    releases.sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
+
     const totalDl  = releases.reduce((s,r)=>s+r.assets.reduce((a,x)=>a+(x.download_count||0),0),0);
     const latest   = releases.find(r=>!r.draft&&!r.prerelease);
 
@@ -257,8 +261,11 @@ async function showApp(repoPath) {
         `<div class="state"><strong>No releases yet</strong>Run release.py to publish your first build.</div>`;
       return;
     }
+    
+    // Pass the actual 'latest' object instead of relying on index 0
     document.getElementById("list").innerHTML =
-      releases.map((r,i) => renderRelease(r, i===0)).join("");
+      releases.map((r) => renderRelease(r, r === latest)).join("");
+      
   } catch(e) {
     document.getElementById("list").innerHTML =
       `<div class="state"><strong>Failed to load</strong>${esc(e.message)}</div>`;
